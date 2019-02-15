@@ -1,0 +1,297 @@
+---
+title: "Lab7"
+author: "Jackson Hubbard"
+date: "November 4, 2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library("tibble")
+library("dplyr")
+library("ggplot2")
+library("broom")
+library("STA210")
+library("Sleuth3") #data sets from the book
+library("olsrr") # model selection
+library("cowplot")
+library("rms")
+library("knitr")
+
+```
+# Part I: Data Preparation
+# Question 1
+
+```{r}
+movies <- movies
+movies2014 <- subset(movies, movies$year >= 2014)
+nrow(movies2014)
+```
+
+# b
+We want to only include movies made recently (since 2014) because these movies reflect the current market most closely. Old movies will have a much different revenue as the economy and inflation were diffferent and people probably did not go to the movies at the same rate they do today. We will get the best prediction if we use data from movies that are from the closest possible enviroment to today
+
+
+# Question 2
+# a
+```{r}
+summary(movies2014$budget)
+```
+
+```{r}
+ggplot(data=movies2014, aes(movies2014$budget)) + geom_histogram(color = "blue", fill = "blue") + labs(titles = "Histogram of Movie's Budgets", subtitle = "Movies from 2014- 2016", x= "Budget", y = "count") +
+        theme(plot.title= element_text(hjust=0.5, size= 18 ), plot.subtitle= element_text(hjust=0.5, size= 16))
+```
+
+
+# b
+Budget is not very normally distributted. It has a very large tail as it is skewed to the right. In additon there is no left tail as the highest count occurs when the budget is 0.
+
+# c
+If the budget is 0, this means that the movie’s budget is missing information from IMDb.com
+
+# d
+```{r}
+movies2014_2 <- subset(movies2014, movies2014$budget > 0)
+ggplot(data=movies2014_2, aes(movies2014_2$budget)) + geom_histogram(color = "blue", fill = "blue") + labs(titles = "Histogram of Movie's Budgets", subtitle = "Movies from 2014- 2016 (Budget 0 removed)", x= "Budget", y = "count") +
+        theme(plot.title= element_text(hjust=0.5, size= 18 ), plot.subtitle= element_text(hjust=0.5, size= 16))
+```
+
+
+# Question 3
+# a
+Analyzing the subset of films from 2014- 2016 with the films with the budget missing removed from the dataset
+
+```{r}
+summary(movies2014_2$gross)
+```
+
+```{r}
+ggplot(data=movies2014_2, aes(movies2014_2$gross)) + geom_histogram(color = "blue", fill = "blue") + labs(titles = "Histogram of Movie's Gross Revenue", subtitle = "Movies from 2014- 2016", x= "Gross Revenue", y = "count") + theme(plot.title= element_text(hjust=0.5, size= 18 ), plot.subtitle= element_text(hjust=0.5, size= 16))
+
+```
+
+# b
+Gross is not very normally distributted. It has a very large tail as it is skewed to the right. In additon there is no left tail as the highest count occurs when the revenue is low.
+
+# c
+Yes a transformation of gross is likely needed in order to make the observations more symmetircal and not have quite as long of a tail (make them have a closer scale)
+
+# Question 4
+# a
+```{r}
+ggplot(data=movies2014_2, aes(movies2014_2$rating)) + geom_bar(color = "blue", fill = "blue") + labs(titles = "Movie's MPAA Ratings", subtitle = "Movies from 2014- 2016", x= "MPAA Rating", y = "count") + theme(plot.title= element_text(hjust=0.5, size= 18 ), plot.subtitle= element_text(hjust=0.5, size= 16))
+
+```
+
+
+# b
+```{r}
+movies2014_2 %>% group_by(rating) %>% summarise( count = n())
+
+```
+
+# c
+Rating is not very normally distributed. As we can see from the bar graph and the table above, PG and PG-13 have exceedingly large counts of over 200, Pg has a medium count of 67 while the other categories have less than 10.
+
+
+# d
+Using G as the reference level will be problematic as the caetgory G has only 2 observations. Thus trying to fit a model off of these two observations is not the best approach.
+
+# e
+```{r}
+movies2014_2 <- movies2014_2 %>% mutate(rating = relevel(rating,ref="PG"))
+
+```
+
+
+
+# Part II: Regression
+
+
+# Question 5
+# a
+
+```{r}
+movies2014_2 <- mutate(movies2014_2, log.gross = log(gross))
+
+```
+
+# b
+```{r}
+pairs(log.gross ~ score + budget + runtime, data= movies2014_2)
+
+```
+
+
+Budget does not appear to have a linear relationship with log.gross, so it neds a transformation. After logging the gross revenue, the linearity looks much better
+
+
+```{r}
+movies2014_2 <- mutate(movies2014_2, log.budget = log(budget), log.score = log(score) )
+pairs(log.gross ~ score + log.budget + runtime, data= movies2014_2)
+```
+
+
+
+# Question 6
+# a
+```{r}
+full.model <- lm(log.gross ~ score + log.budget + runtime + rating + genre, data= movies2014_2)
+
+```
+
+# b
+```{r}
+ols_step_forward_aic(full.model)
+
+```
+
+Looking at the model selection, we see that the procedure selected log.budget, score, rating, and genre using minimizing the AIC as the selection criteria. After plotting votes, it is clear that votes also neds a transformation so I will log votes as well.
+
+# c
+Since we only included main effects for the forward selection, we may have missed important interaction effects. Use Nested F tests to determine if there are significant interaction between genre and any of the numeric variables in the model. Show the output from the Nested F tests and list the significant interactions (if there are any).
+```{r}
+model1 <- lm(log.gross ~ log.budget + rating + genre + score, data= movies2014_2)
+model2 <- lm(log.gross ~ log.budget + rating + genre + score + genre*score + genre*rating + genre*log.budget, data= movies2014_2)
+kable(anova(model1,model2),format="html",digits=3)
+```
+
+
+Looking at the output from the anova model, we see that there is a significant effect of adding an interaction effect of genre with the variables. Now we must detemrine with which other explanatory variable makes the difference.
+
+
+
+```{r}
+model3 <- lm(log.gross ~ log.budget + rating + genre + score, data= movies2014_2)
+model4 <- lm(log.gross ~ log.budget + rating + genre + score + genre*score, data= movies2014_2)
+kable(anova(model3,model4),format="html",digits=3)
+```
+
+```{r}
+model5 <- lm(log.gross ~ log.budget + rating + genre + score + genre*score, data= movies2014_2)
+model6 <- lm(log.gross ~ log.budget + rating + genre + score + genre*score + genre*rating, data= movies2014_2)
+kable(anova(model5,model6),format="html",digits=3)
+```
+
+```{r}
+model7 <- lm(log.gross ~ log.budget + rating + genre + score + genre*score, data= movies2014_2)
+
+model8 <- lm(log.gross ~ log.budget + rating + genre + score + genre*score +  genre*log.budget, data= movies2014_2)
+kable(anova(model7,model8),format="html",digits=3)
+```
+
+From these three subsequent anova outputs, we see that we gain valuable insight by adding the interaction effect of genre and score, but not from adding genre and rating or genre and log.budget.
+
+
+# d
+```{r}
+final.model <- lm(log.gross ~ log.budget + rating + genre + score + genre*score, data= movies2014_2)
+tidy(final.model)
+```
+
+```{r}
+glance(final.model)
+```
+
+
+# Question 7
+```{r}
+movies2014_2 <- mutate(movies2014_2, resid.final= resid(final.model))
+
+pairs(log.gross ~ log.budget + rating + genre + score + genre*score, data= movies2014_2)
+```
+
+```{r}
+qqnorm(movies2014_2$resid.final, pch = 1, frame = FALSE) 
+qqline(movies2014_2$resid.final, col = "black", lwd = 2)
+```
+
+```{r}
+r1 <- ggplot(movies2014_2, aes(x = log.budget, y = resid.final)) + geom_point(color = "blue") + labs(title= "Residuals of Model", x = "log(Budget)", y= "Residual of Model") + theme(plot.title = element_text(hjust = 0.5, size = 18)) + geom_hline(yintercept = 0)
+
+
+r2 <- ggplot(movies2014_2, aes(x = rating, y = resid.final)) + geom_point(color = "blue") + labs(title= "Residuals of Model", x = "Rating", y= "Residual of Model") + theme(plot.title = element_text(hjust = 0.5, size = 18)) + geom_hline(yintercept = 0)
+
+
+r3 <- ggplot(movies2014_2, aes(x = genre, y = resid.final)) + geom_point(color = "blue") + labs(title= "Residuals of Model", x = "Genre", y= "Residual of Model") + theme(plot.title = element_text(hjust = 0.5, size = 18)) + geom_hline(yintercept = 0)
+
+
+r4 <- ggplot(movies2014_2, aes(x = score, y = resid.final)) + geom_point(color = "blue") + labs(title= "Residuals of Model", x = "Score", y= "Residual of Model") + theme(plot.title = element_text(hjust = 0.5, size = 18)) + geom_hline(yintercept = 0)
+
+plot_grid(r1, r2, r3, r4, ncol = 2)
+```
+
+```{r}
+movies2014_2 <- movies2014_2 %>% mutate(leverage = hatvalues(final.model), cooks = cooks.distance(final.model), stand.resid = rstandard(final.model), obs.num = row_number())
+
+p7 <- ggplot(data = movies2014_2, aes(x = obs.num, y = leverage)) + geom_point(alpha = 0.5) + geom_hline(yintercept = (2*20)/512, color = "red")+ labs(x = "Observation Number", y = "Leverage", title = "Leverage")
+
+p8 <- ggplot(data = movies2014_2, aes(x = obs.num, y = cooks)) + geom_point() + geom_hline(yintercept = 1, color = "red") + labs(x = "Observation Number", y = "Cook's Distance", title = "Cook's Distance")
+
+plot_grid(p7, p8, ncol = 2)
+```
+
+
+The residual plots do not look great. Especially for the rating, we see that there are large differences in the variability of the resuiduals across the different rating categories. This is likely due to the huge difference in sample sizes. This can also be applied to the genre residual plos, as several of the categories have a much smaller sample size that results in differences in the variabiluty of the residuals. The residauls for the logBudget plot look pretty good while the residuals for the score plot are decent. There is a slight cause for concern for the V shaped pattern on the bottom half of the residual plot. There are also lots of points woth high leverage but this is acceptable since none of them have high cooks distances.
+
+
+# Part III: Prediction
+
+
+# Question 8
+# a
+
+```{r}
+tonya = data.frame(genre= "Biography", score= 7.5, rating = "R", log.budget = log(11000000))
+predict.lm(final.model,tonya,interval="prediction")
+```
+The predicted log(Gross) is 16.32344 with a 95% confidence interval of (13.2582, 19.38868). This equates to 12,279,478.3483 with an interval of 572,747.365175 to 263,267,188.423.
+
+b
+The US gross revenue is $30,014,539. Thus the residual is 17,735,060.6517.
+
+
+
+# Question 9
+# a
+
+```{r}
+florida = data.frame(log.budget = log(2000000), score = 7.6, rating = "R", genre = "Drama")
+predict.lm(final.model,florida,interval="prediction")
+```
+
+The predicted log(Gross) is 14.80136 with a 95% confidence interval of (11.74278, 17.85994). Transforming this to Us Dollars equates to 2,680,087.50, and the 95% predicted interval is between 125,841.69 and 57,078,610.09.
+
+
+# b
+The actual US Gross revenue for The Florida Project was 5,904,366. Thus, the residual is 3,224,278.50.
+
+
+
+# Question 10
+# a
+
+```{r}
+wonder = data.frame(log.budget = log(149000000), score = 7.5, rating = "PG-13", genre = "Action")
+
+predict.lm(final.model, wonder, interval="prediction")
+
+```
+The predicted log(Gross) is 19.05105 with a 95% confidence interval of (16.01134, 22.09076). Transforming this to Us Dollars equates to 187,830,402.60, and the 95% predicted interval is between 8,987,452.54 and 3,925,501,693.
+
+
+# b
+The actual revenue for Wonder Woman was 412,563,408 making the residual 224,733,005.40.
+
+
+# Question 11
+
+```{r}
+glance(final.model)
+
+```
+
+My final model did not do a very good job of predicting the gross revenue for a movie. As the ouputted model shows, the r-squared value is only 0.54, which means that only 54% of the variation in gross revenue is explained by the model. This can be seen in how the model performed with the test cases of I Tonya, Florida Project, and Wonder Woman, as none of the residuals were very small. The model underpredicted the revenue for all three of those movies.
+
+These poor results are likely because of the broken assumptins as discussed previously. The lack of constant variance between the groups is likely the largest problem, in additon to the departures from normality as seen in the qq plots.
