@@ -1,0 +1,203 @@
+---
+title: "Lab10"
+author: "Jackson Hubbard"
+date: "November 26, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library("tibble")
+library("dplyr")
+library("ggplot2")
+library("broom")
+library("STA210")
+library("Sleuth3") #data sets from the book
+library("olsrr") # model selection
+library("cowplot")
+library("rms")
+library("knitr")
+
+```
+
+```{r}
+gss <- read_csv("https://raw.githubusercontent.com/matackett/sta210/master/data/gss2010.csv")
+
+```
+
+
+# Question 1.
+Make the variable natmass a factor variable type. Then use the relevel() function to reformat natmass so that About Right is the baseline category (i.e. reference level).
+
+```{r}
+gss <- gss %>% mutate(natmass =as.factor(natmass))
+gss <- gss %>% mutate(relevel(gss$natmass, ref = "About Right"))
+```
+
+# Question 2 
+```{r}
+gss <- gss %>% 
+  mutate(polviews=factor(polviews,levels=c("Extremely Liberal","Liberal","Slightly Liberal",
+                                           "Moderate","Slightly Conservative",
+                                           "Conservative","Extremely Conservative")))
+```
+
+# a
+```{r}
+# counts for polviews
+gss %>% group_by(polviews) %>% summarise(n = n())
+```
+Moderate political views occur most frequently in this dataset
+
+
+# b
+Yes there seems to be a relationship between a person’s political views and their views on mass transportation spending. It seems that the more conservative a person is, the more likely they are to respond that too much is being spent, while the more liberal a person is the more likely they are to respond that not enough money is spent on transportation.
+
+# Question 3
+```{r}
+# mean centered age and sei
+gss <- gss %>% mutate(ageCent = age- mean(age), seiCent = sei - mean(sei))
+```
+
+
+# Question 4
+```{r}
+model1 <- multinom(natmass ~ ageCent + sex + seiCent + region, data = gss)
+
+```
+
+```{r}
+kable(tidy(model1),format="markdown")
+
+```
+
+
+# Question 5.
+# a
+For every year older a person gets in age, the log-odds of a person responding Too Little instead of About Right in response to being asked about government spending on mass transportation increases by 1.0062408.
+
+# b
+For every year older a person gets in age, the odds of a person responding Too Little instead of About Right in response to being asked about government spending on mass transportation multiplies by a factor of 2.73529912724.
+
+
+
+# Question 6
+# a
+```{r}
+# adding in polviews
+model2 <- multinom(natmass ~ ageCent + sex + 
+                     seiCent + region + polviews, data=gss)
+```
+
+```{r}
+tidy(model2)
+
+```
+
+# b
+```{r}
+# comparing model1 and model2
+anova(model1,model2,test="Chisq")
+```
+Looking at the output from this test, we see that the p value of 7.322021e-10 is less than the threshold of 0.05. Therefore, there is evidence that polvies is a significant predictor for the response variable of a person’s attitude towards government spending on public transportation.
+
+# Question 7
+
+```{r}
+predprobs <- data.frame(pred = predict(model2,type="probs"))
+
+```
+
+# a
+```{r}
+# indicator variables for response
+gss <- gss %>% 
+  mutate(aboutright = if_else(gss$natmass=="About Right",1,0),
+         toomuch = if_else(gss$natmass=="Too Much",1,0),
+         toolittle = if_else(gss$natmass=="Too Little",1,0))
+```
+
+# b
+```{r}
+# add residuals to gss
+gss <- gss %>% mutate(
+  aboutright.resid = aboutright - predprobs$pred.About.Right, 
+  toomuch.resid = toomuch - predprobs$pred.Too.Much, 
+  toolittle.resid = toolittle - predprobs$pred.Too.Little)
+```
+
+
+# Question 8
+# a
+```{r}
+# binned residual plots for response vs. age
+binnedplot(gss$age, gss$aboutright.resid, xlab = "Age", ylab = "Residuals", main = "Residuals vs. Age for About Right")
+```
+
+```{r}
+binnedplot(gss$age, gss$toomuch.resid, xlab = "Age", ylab = "Residuals", main = "Residuals vs. Age for Too Much")
+
+```
+
+```{r}
+binnedplot(gss$age, gss$toolittle.resid, xlab = "Age", ylab = "Residuals", main = "Residuals vs. Age for Too Little")
+```
+
+
+# b
+```{r}
+# binned residual plots for response vs. sei
+binnedplot(gss$sei, gss$aboutright.resid, xlab = "Socioeconomic Index", ylab = "Residuals", main = "Residuals vs. Socioeconomic Index for About Right")
+binnedplot(gss$sei, gss$toomuch.resid, xlab = "Socioeconomic Index", ylab = "Residuals", main = "Residuals vs. Socioeconomic Index for Too Much")
+binnedplot(gss$sei, gss$toolittle.resid, xlab = "Socioeconomic Index", ylab = "Residuals", main = "Residuals vs. Socioeconomic Index for Too Little")
+
+```
+
+
+
+
+# Question 9
+```{r}
+# average residuals for sex
+gss %>% group_by(sex) %>%
+  summarise(aboutright.avg = mean(aboutright.resid),
+            toomuch.avg = mean(toomuch.resid),
+            toolittle.avg=mean(toolittle.resid))
+```
+
+
+# b
+```{r}
+# average residuals for region
+gss %>% group_by(region) %>%
+  summarise(aboutright.avg = mean(aboutright.resid),
+            toomuch.avg = mean(toomuch.resid),
+            toolittle.avg=mean(toolittle.resid))
+```
+
+
+# c
+```{r}
+#average residuals for polviews
+gss %>% group_by(polviews) %>%
+  summarise(aboutright.avg = mean(aboutright.resid),
+            toomuch.avg = mean(toomuch.resid),
+            toolittle.avg=mean(toolittle.resid))
+```
+
+# Question 10
+# a
+Based on the ouputs of questions 8 and 9 it is appropriate to use model2 to describe the relationship between one’s political views and one’s attitude toward mass transportation spending. Each of the binned resdidual plots for the numerical explanatory variables look good as there is random scatter and not too far away from 0. The residuals also look for the categorical variables.
+
+# b
+The relationship between one’s political views and one’s attitude towards mass transportation spending is reflected below:
+
+If a person is politically moderate the odds that they believe government spending on mass transportation is too little vs. about right is approximately e^(.3341) which is 1.3966.
+
+If a person is politically slightly conservative the odds that they believe government spending on mass transportation is too little vs. about right is approximately e^(.4032) which is 1.4966.
+
+If a person is politically conservative the odds that they believe government spending on mass transportation is too little vs. about right is approximately e^(.3115) which is 1.3654.
+
+If a person is politically extremely conservative the odds that they believe government spending on mass transportation is too little vs. about right is approximately e^(.1183) which is 1.1255.
+
+If a person is politically moderate the odds that they believe government spending on mass transportation is too much vs. about right is approximately e^(.3424) which is 1.4083.
