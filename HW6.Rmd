@@ -1,0 +1,204 @@
+---
+title: "HW6"
+author: "Jackson Hubbard"
+date: "November 8, 2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library("tibble")
+library("dplyr")
+library("ggplot2")
+library("broom")
+library("STA210")
+library("Sleuth3") #data sets from the book
+library("olsrr") # model selection
+library("cowplot")
+library("rms")
+library("knitr")
+
+```
+
+# Question 1
+
+```{r}
+sunspots <- ex1515
+```
+
+```{r}
+p1 <- ggplot(data=sunspots,aes(x=Sunspots,y=lynx)) + geom_point(alpha=0.7) +
+  geom_line() + 
+  labs(title="Lynx vs. Sunspot")
+p2 <- ggplot(data=sunspots,aes(x=Year,y=lynx)) + geom_point(alpha=0.7) +
+  geom_line() + 
+  labs(title="Lynx vs. Year")
+p3 <- ggplot(data=sunspots,aes(x=Year, Sunspots)) + geom_point(alpha=0.7) +
+  geom_line() + 
+  labs(title="Sunspot vs. Year")
+plot_grid(p1,p2,p3,ncol=2)
+```
+
+
+Looking at these outputted graphs, it appears that the year and the value for sunspots both have a strong influence on the number of lynx. It appears that there is a serial effect with solar activity and number of lynx. Thus, we will analyze a normal linear regression model and then one that takes this time series into effect.
+
+```{r}
+# Lynx vs. Sunspot
+model <- lm(lynx ~ Sunspots, data=sunspots)
+kable(tidy(model),format="markdown",digits=3)
+```
+
+```{r}
+glance(model)$r.squared
+```
+From this first model, the p value for the coefficient of sunspots is very high and insignifcant and the r-squared is very low.
+
+```{r}
+#residuals vs. Sunspot
+sunspots <- sunspots %>% mutate(Residuals = resid(model))
+
+ggplot(data=sunspots, aes(x=Sunspots, y=Residuals)) + geom_point() + geom_line()+
+  geom_hline(yintercept=0,color="red") + 
+  labs(title="Residuals vs. Sunspot") + 
+  theme(plot.title=element_text(hjust=0.5))
+```
+
+```{r}
+ggplot(data=sunspots, aes(x=Year, y=Residuals)) + geom_point() + geom_line() +
+  geom_hline(yintercept=0,color="red")+
+    labs(title="Residuals vs. Year") + 
+  theme(plot.title=element_text(hjust=0.5))
+```
+
+
+These residuals seem to have a pattern to them based on the year and are clustered by year, so it looks like we need to account for the year. The residuals also oscillate between being positive and negative in value. First I will try using the year as an explanatory variable.
+
+
+```{r}
+Residuals <- resid(model)
+resid_lag1 <- sunspots %>% slice(-n()) %>% select(resid_lag1=Residuals) 
+#obs 1 - 36
+resid_current <- sunspots %>% slice(-1) %>% select(resid_current=Residuals) 
+
+#obs 2 - 37
+Years <- sunspots %>% slice(-1) %>% select(Year)
+kable(head(bind_cols(Years,resid_lag1,resid_current)),format="html",digits=3)
+```
+
+```{r}
+sum(resid_current * resid_lag1) / sum(sunspots$Residuals^2)
+```
+
+```{r}
+# Add Year to the model 
+model_v2 <- lm(lynx ~ Sunspots + Year, data=sunspots)
+kable(tidy(model_v2),format="html",digits=3)
+```
+
+```{r}
+glance(model_v2)$r.squared
+```
+
+```{r}
+#residuals vs. Sunspot and Year
+sunspots <- sunspots %>% mutate(Residuals_v2 = resid(model_v2))
+ggplot(data=sunspots, aes(x=Sunspots, y=Residuals_v2)) + geom_point() + geom_line() +
+  geom_hline(yintercept=0,color="red") + 
+  labs(title="Residuals vs. Sunspot") + 
+  theme(plot.title=element_text(hjust=0.5))
+```
+
+```{r}
+#residuals vs. Sunspot
+sunspots <- sunspots %>% mutate(Residuals_v2 = resid(model_v2))
+
+ggplot(data=sunspots, aes(x=Year, y=Residuals_v2)) + geom_point() + geom_line() +
+  geom_hline(yintercept=0,color="red")+
+    labs(title="Residuals vs. Year") + 
+  theme(plot.title=element_text(hjust=0.5))
+```
+
+
+
+Even after adding year to the linear regression model, the residuals still do not look great, as there is still residual values similar to the years around them so there is a pattern. They also still oscillate between being positive and negative. Thus a model with a lag is needed.
+
+
+```{r}
+# compute the lag-1 autorcorrelation coefficient
+Residuals_v2 <- sunspots %>% select(Residuals_v2)
+resid_lag1 <- sunspots %>% slice(-n()) %>% select(Residuals_v2) 
+#obs 1 - 36
+resid_current <- sunspots %>% slice(-1) %>% select(Residuals_v2) 
+#obs 2 - 37
+print(paste("autocorrelation: ",round(sum(resid_current * resid_lag1) / sum(sunspots$Residuals_v2^2),digits=3)))
+```
+
+```{r}
+sunspots <- sunspots %>% mutate(lynx_prev=lag(sunspots$Lynx,1))
+lynx_data <- sunspots %>% slice(-1) %>% select(Year, Lynx, lynx_prev)
+kable(head(lynx_data),format="html",digits=3)
+```
+
+```{r}
+model_ar1 <- lm(Lynx ~ lynx_prev,data=lynx_data)
+kable(tidy(model_ar1),format="html",digits=3)
+```
+
+```{r}
+# predicting from sunspots the previous year
+sunspots <- sunspots %>% mutate(sunspots_prev=lag(sunspots$Sunspot,1))
+lag1_data <- sunspots %>% slice(-1)
+kable(lag1_data %>% select(Sunspots, sunspots_prev) %>% head(),format="html",digits=3)
+```
+
+```{r}
+model_lag1 <- lm(Lynx ~ sunspots_prev,data=lag1_data)
+kable(tidy(model_lag1),format="html",digits=3)
+```
+
+```{r}
+glance(model_lag1)$r.squared
+```
+
+```{r}
+lag1_data <- lag1_data %>% mutate(ResidualsFinal = resid(model_lag1))
+p1 <- ggplot(data=lag1_data,aes(x=sunspots_prev,y=ResidualsFinal)) + geom_point() + 
+  geom_hline(yintercept=0,color="red") + geom_line() + 
+   labs(title="Residuals vs. Sunspot from Previous Year") + 
+  theme(plot.title = element_text(hjust=0.5))
+
+p2 <- ggplot(data=lag1_data,aes(x=Year,y=ResidualsFinal)) + geom_point() + 
+  geom_hline(yintercept=0,color="red") + geom_line() + 
+   labs(title="Residuals vs. Year") + 
+  theme(plot.title = element_text(hjust=0.5))
+
+plot_grid(p1,p2,ncol=2)
+```
+
+
+These residuals from the lag 1 model are better than the prior models, but they are still not great. There is still a good amount of autocorrelation and each residual seems to be similar to the ones that have a similar year to it. The residuals also still oscillate between being positive and negative.
+
+
+
+
+```{r}
+# compute the lag-1 autorcorrelation coefficient
+final.Residuals <- lag1_data %>% select(ResidualsFinal)
+final.resid_lag1 <- lag1_data %>% slice(-n()) %>% select(ResidualsFinal) 
+#obs 1 - 36
+final.resid_current <- lag1_data %>% slice(-1) %>% select(ResidualsFinal) 
+#obs 2 - 37
+print(paste("autocorrelation: ",round(sum(final.resid_current * final.resid_lag1) / sum(lag1_data$ResidualsFinal^2),digits=3)))
+
+```
+
+
+As the output above shows the lag 1 model has an autocorrelation of 0.71. The lag 0 model had an autocrrelation of 0.7043741. So the lag 1 model actually has a higher autocorrealtion which is not particularly good, so we need to use a larger lag. This can be confirmed by looking at the residual plots as they still do not alternate between positive and negative and instead show a trend of values being close to another a couple times in a row. We can use a higher number of lags (such as 2 or 8), as seen in the pacf graph below. Thus, the model can be improved to have larger predictive power.
+
+
+
+
+```{r}
+pacf(sunspots$Lynx)
+
+```

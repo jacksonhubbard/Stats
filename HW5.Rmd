@@ -1,0 +1,301 @@
+---
+title: "HW5"
+author: "Jackson Hubbard"
+date: "November 1, 2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library("tibble")
+library("dplyr")
+library("ggplot2")
+library("broom")
+library("STA210")
+library("Sleuth3") #data sets from the book
+library("olsrr") # model selection
+library("cowplot")
+library("rms")
+
+```
+
+## Question 1
+teachers expectations effect student grades
+
+```{r}
+teacher <- ex1321
+teacher <- teacher %>% mutate(Grade = as.factor(Grade))
+pairs(Gain ~ Treatment + Class + Grade, data = teacher)
+
+```
+
+# Model 1 - Treatment + class
+
+```{r}
+model.1<- lm (Gain ~ Treatment + Class, data = teacher)
+tidy(model.1)
+glance(model.1)
+
+```
+
+
+```{r}
+teacher <- teacher %>% mutate(predicted = predict(model.1))
+resid.1 <- resid(model.1)
+teacher <- teacher %>% mutate(residual1 = resid.1)
+
+
+p1 <- ggplot(teacher, aes(x = predicted, y = residual1)) + geom_point() + geom_hline(yintercept = 0) + labs(title = "Residual vs. Fitted Plot", subtitle = "Model 1", x = "Fitted Values", y = "Residuals") + theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5))
+
+p2 <- ggplot(teacher, aes(x = Treatment, y = residual1)) + geom_point(color = "blue") + labs(title= "Residuals vs. Treatment", subtitle = "Model 1", x = "Treatment", y= "Residual of Model", legend= "Residual value") + theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5)) + geom_hline(yintercept = 0)
+
+p3 <- ggplot(teacher, aes(x = Class, y = residual1)) + geom_point(color = "blue") + labs(title= "Residuals vs. Class", subtitle= "Model 1", x = "Class", y= "Residual of Model", legend= "Residual value") + theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5)) + geom_hline(yintercept = 0)
+
+plot_grid(p1, p2, p3, ncol =2)
+
+```
+
+# Model 2 - Treatment + Grade
+```{r}
+model.2<- lm (Gain ~ Treatment + Grade, data = teacher)
+tidy(model.2)
+glance(model.2)
+```
+
+```{r}
+teacher <- teacher %>% mutate(predicted2 = predict(model.2))
+resid.2 <- resid(model.2)
+teacher <- teacher %>% mutate(residual2 = resid.2)
+
+
+plot1 <- ggplot(teacher, aes(x = predicted2, y = residual2)) + geom_point() + geom_hline(yintercept = 0) + labs(title = "Residual vs. Fitted Plot", subtitle = "Model 2", x = "Fitted Values", y = "Residuals") + theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5))
+
+plot2 <- ggplot(teacher, aes(x = Treatment, y = residual2)) + geom_point(color = "blue") + labs(title= "Residuals vs. Treatment", subtitle = "Model 2", x = "Treatment", y= "Residual of Model", legend= "Residual value") + theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5)) + geom_hline(yintercept = 0)
+
+plot3 <- ggplot(teacher, aes(x = Grade, y = residual2)) + geom_point(color = "blue") + labs(title= "Residuals vs. Grade", subtitle= "Model 2", x = "Grade", y= "Residual of Model", legend= "Residual value") + theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5)) + geom_hline(yintercept = 0)
+
+plot_grid(plot1, plot2, plot3, ncol =2)
+```
+
+```{r}
+tidy(model.2)
+glance(model.2)
+```
+The model is :
+
+Gain = 13.457524 + 4.262309 ∗ TreatmentPygmalion −5.426130 ∗ Grade2 −9.247753 ∗ Grade3 −11.410765 ∗ Grade4 + 2.875025 ∗ Grade5 −3.741192 ∗ Grade6.
+
+However, Grade6 and Grade5 are not significant as their p values are higher than the threshold of 0.05.
+
+# Assumptions of Model
+```{r}
+teacher <- teacher %>% mutate(predicted2 = predict(model.2))
+teacher <- teacher %>% mutate(residual2 = resid.2)
+teacher <- teacher %>% mutate(leverage = hatvalues(model.2), cooks = cooks.distance(model.2),stand.resid = rstandard(model.2))
+teacher <- teacher %>% mutate(obs=row_number())
+
+#check residuals
+plot1 <- ggplot(teacher, aes(x = predicted2, y = residual2)) + geom_point() + geom_hline(yintercept = 0) + labs(title = "Residual vs. Fitted Plot", subtitle = "Model 2", x = "Fitted Values", y = "Residuals") + theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5))
+
+plot2 <- ggplot(teacher, aes(x = Treatment, y = residual2)) + geom_point(color = "blue") + labs(title= "Residuals vs. Treatment", subtitle = "Model 2", x = "Treatment", y= "Residual of Model", legend= "Residual value") + theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5)) + geom_hline(yintercept = 0)
+
+plot3 <- ggplot(teacher, aes(x = Grade, y = residual2)) + geom_point(color = "blue") + labs(title= "Residuals vs. Grade", subtitle= "Model 2", x = "Grade", y= "Residual of Model", legend= "Residual value") + theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5)) + geom_hline(yintercept = 0)
+
+plot_grid(plot1, plot2, plot3, ncol =2)
+
+```
+
+```{r}
+# check normality
+qqnorm(teacher$residual2, pch = 1, frame = FALSE) 
+qqline(teacher$residual2, col = "black", lwd = 2)
+```
+
+
+```{r}
+# check leverage, cooks distance, and standard residuals
+lev <- ggplot(data=teacher, aes(x=obs,y=leverage)) + geom_point(alpha=0.5) + geom_hline(yintercept=0.0375,color="red")+ labs(x="Observation Number",y="Leverage",title="Leverage")
+
+cooks <- ggplot(data=teacher, aes(x=obs, y=cooks)) + geom_point() + geom_hline(yintercept=1,color="red") + labs(x="Observation Number",y="Cook's Distance",title="Cook's Distance")
+
+                                                                                  plot_grid(lev, cooks, ncol=2)
+```
+
+
+```{r}
+sr1 <- ggplot(data=teacher, aes(x=predicted,y=stand.resid)) + geom_point()+ geom_hline(yintercept =0) + labs(x="Predicted",y="Standard Residuals",title="Predicted vs Standard Residuals")
+sr2 <- ggplot(data=teacher, aes(x=Treatment,y=stand.resid)) + geom_point()+ geom_hline(yintercept =0) + labs(x="Treatment",y="Standard Residuals",title="Treatment vs Standard Residuals")
+sr3 <- ggplot(data=teacher, aes(x=Grade,y=stand.resid)) + geom_point()+ geom_hline(yintercept =0) +labs(x="Grade",y="Standard Residuals",title="Grade vs Standard Residuals")
+                                                                                  plot_grid(sr1, sr2, sr3,ncol=2)
+```
+
+```{r}
+tidy(vif(model.2))                                                                
+```
+Looking at the outputted graphs, we see that the residuals look pretty good, as there is constant variance (more so than with the model with clas instead of grade which is why I am using the model with grade). Next, we see that the QQ plot looks good which means that there is the data is normally distributed. We also know that the indpendence assumption is met as one student’s performance is indepndent of the other students. The linearity assumption is also met. On the following set of graphs we see that there are no observations with high cook’s disatance, and a couple with high leverance (defined as higher than the threshold of 2p/n = 2*6/320). The standard residuals plots also look good as there is relatively constant variance. Taking all of this info together we can say that there are no issues with outliers. Then, we see that all of the explanatory variable have low VIF values which means that there is no issue with multicollinearity.
+
+
+
+# Question 2
+Does the season have a significant effect on the number of bike rentals (cnt)? If so, describe the effect of season on the average number of bike rentals.
+```{r}
+bikeshare <- bikeshare
+bikeshare <- bikeshare %>% mutate(weekday = as.factor(weekday))
+bikeshare <- bikeshare %>% mutate(workingday = as.factor(workingday))
+bikeshare <- bikeshare %>% mutate(holiday = as.factor(holiday))
+bikeshare <- bikeshare %>% mutate(weathersit = as.factor(weathersit))
+```
+
+# a
+The main objective for the regression model is adjusting for many variables. This is beacuse we want to see the effect season has on the number of bike rentals (cnt) after ajusting for several other variables. Because of this goal, I will not be focused on the ability to understand the coefficients except for the season. First, I will build a model with only what I am adjusting for (the variables besides season) and then use model selection to see what I shoudl include. Then at the end, I will add season to the model to se its effect after accounting for all the other variables.
+
+# b
+```{r}
+full.model <- lm(cnt ~  yr + holiday + workingday + weathersit + temp + hum + windspeed + registered, data= bikeshare)
+
+forward <- ols_step_forward_aic(full.model)
+forward$predictors
+```
+
+```{r}
+plot(forward)
+```
+
+From the forward selection, we see that our model should include “registered”, workingday“,”temp“,”hum“,”holiday“, and”windspeed".
+
+
+```{r}
+model1 <- lm(cnt ~ registered + workingday+ temp + hum + holiday + windspeed, data= bikeshare)
+tidy(model1)
+```
+
+```{r}
+glance(model1)
+```
+
+```{r}
+bikeshare <- bikeshare %>% mutate(predicted = predict(model1))
+bikeshare <- bikeshare %>% mutate(residual1 = resid(model1))
+bikeshare <- bikeshare %>% mutate(predicted = predict(model1))
+
+#plot of residuals
+ggplot(bikeshare, aes(x = predicted, y = residual1)) + geom_point() + geom_hline(yintercept = 0) + labs(title = "Residual vs. Fitted Plot", x = "Fitted Values", y = "Residuals") 
+```
+
+```{r}
+r1 <- ggplot(bikeshare, aes(x = temp, y = residual1)) + geom_point(color = "blue") + labs(title= "Residuals of Model 1", x = "Temperature", y= "Residual of Model", legend= "Residual value") + theme(plot.title = element_text(hjust = 0.5, size = 18)) + geom_hline(yintercept = 0)
+
+r2 <- ggplot(bikeshare, aes(x = holiday, y = residual1)) + geom_point(color = "blue") + labs(title= "Residuals of Model 1", x = "Holiday", y= "Residual of Model", legend= "Residual value") + theme(plot.title = element_text(hjust = 0.5, size = 18)) + geom_hline(yintercept = 0)
+
+r3 <- ggplot(bikeshare, aes(x = workingday, y = residual1)) + geom_point(color = "blue") + labs(title= "Residuals of Model 1", x = "Working Day", y= "Residual of Model", legend= "Residual value") + theme(plot.title = element_text(hjust = 0.5, size = 18)) + geom_hline(yintercept = 0)
+
+r4 <- ggplot(bikeshare, aes(x = registered, y = residual1)) + geom_point(color = "blue") + labs(title= "Residuals of Model 1", x = "Registered", y= "Residual of Model", legend= "Residual value") + theme(plot.title = element_text(hjust = 0.5, size = 18)) + geom_hline(yintercept = 0)
+
+r5 <- ggplot(bikeshare, aes(x = hum, y = residual1)) + geom_point(color = "blue") + labs(title= "Residuals of Model 1", x = "Humidity", y= "Residual of Model", legend= "Residual value") + theme(plot.title = element_text(hjust = 0.5, size = 18)) + geom_hline(yintercept = 0)
+
+
+r6 <- ggplot(bikeshare, aes(x = windspeed, y = residual1)) + geom_point(color = "blue") + labs(title= "Residuals of Model 1", x = "Windspeed", y= "Residual of Model", legend= "Residual value") + theme(plot.title = element_text(hjust = 0.5, size = 18)) + geom_hline(yintercept = 0)
+
+plot_grid(r1, r2, r3, r4, r5, r6, ncol =3)
+```
+
+
+# model 2- squaring temperature
+```{r}
+bikeshare <- bikeshare %>% mutate(temp2 = temp*temp)
+model2 <- lm(cnt ~ registered + workingday+ temp + hum + holiday + windspeed + temp2, data= bikeshare)
+bikeshare <- bikeshare %>% mutate(predicted2 = predict(model2)) 
+bikeshare <- bikeshare %>% mutate(resid2 = resid(model2))
+
+
+
+ggplot(bikeshare, aes(x = predicted2, y = resid2)) + geom_point() + geom_hline(yintercept = 0) + labs(title = "Residual vs. Fitted Plot", x = "Fitted Values", y = "Residuals") 
+```
+
+```{r}
+g1 <- ggplot(bikeshare, aes(x = temp, y = residual1)) + geom_point(color = "blue") + labs(title= "Residuals of Model 1", x = "Temperature", y= "Residual of Model", legend= "Residual value") + theme(plot.title = element_text(hjust = 0.5, size = 18)) + geom_hline(yintercept = 0)
+
+g2<- ggplot(bikeshare, aes(x = temp, y = resid2)) + geom_point(color = "blue") + labs(title= "Residuals of Model 2", x = "Temperature", y= "Residual of Model", legend= "Residual value") + theme(plot.title = element_text(hjust = 0.5, size = 18)) + geom_hline(yintercept = 0)
+
+
+plot_grid(g1, g2, ncol =2)
+```
+We see from these graphs that there is a slight improvement in the constant variance after including a squared term for temperature in model 2. Thus, we will use this model. We can also see that Model 2 does not perform very well for small values of bike count, but there seems to be consant variance as the number of bikes increase. This may be partly because after exploring the data, there is an observation (likely right when the company started) when there were only 22 bikes used.
+
+
+
+Checking assumptions of final model:
+```{r}
+pairs(cnt ~ registered + workingday+ temp + hum + holiday + windspeed + temp2, data= bikeshare)
+qqnorm(bikeshare$resid2, pch = 1, frame = FALSE) 
+qqline(bikeshare$resid2, col = "black", lwd = 2)
+```
+
+```{r}
+r.1 <- ggplot(bikeshare, aes(x = temp, y = resid2)) + geom_point(color = "blue") + labs(title= "Residuals of Model 1", x = "Temperature", y= "Residual of Model", legend= "Residual value") + theme(plot.title = element_text(hjust = 0.5, size = 18)) + geom_hline(yintercept = 0)
+
+r.2 <- ggplot(bikeshare, aes(x = holiday, y = resid2)) + geom_point(color = "blue") + labs(title= "Residuals of Model 1", x = "Holiday", y= "Residual of Model", legend= "Residual value") + theme(plot.title = element_text(hjust = 0.5, size = 18)) + geom_hline(yintercept = 0)
+
+r.3 <- ggplot(bikeshare, aes(x = workingday, y = resid2)) + geom_point(color = "blue") + labs(title= "Residuals of Model 1", x = "Working Day", y= "Residual of Model", legend= "Residual value") + theme(plot.title = element_text(hjust = 0.5, size = 18)) + geom_hline(yintercept = 0)
+
+r.4 <- ggplot(bikeshare, aes(x = registered, y = resid2)) + geom_point(color = "blue") + labs(title= "Residuals of Model 1", x = "Registered", y= "Residual of Model", legend= "Residual value") + theme(plot.title = element_text(hjust = 0.5, size = 18)) + geom_hline(yintercept = 0)
+
+r.5 <- ggplot(bikeshare, aes(x = hum, y = resid2)) + geom_point(color = "blue") + labs(title= "Residuals of Model 1", x = "Humidity", y= "Residual of Model", legend= "Residual value") + theme(plot.title = element_text(hjust = 0.5, size = 18)) + geom_hline(yintercept = 0)
+
+
+r.6 <- ggplot(bikeshare, aes(x = windspeed, y = residual1)) + geom_point(color = "blue") + labs(title= "Residuals of Model 1", x = "Windspeed", y= "Residual of Model", legend= "Residual value") + theme(plot.title = element_text(hjust = 0.5, size = 18)) + geom_hline(yintercept = 0)
+
+plot_grid(r.1, r.2, r.3, r.4, r.5, r.6, ncol =3)
+
+```
+
+Looking at the outputted graphs we see that the linearity assumption is met. Further, the residual plots look good, so it seems that the constant variance assumption is also met. There may be problems with holiday’s constant variance but this is probably because of the huge differences in sample sizes. The normality assumption may not be met as the QQ plot shows a significant departure for about a third of the data. We also know that the independence assumption is met (also no serial or cluster effects).
+
+
+```{r}
+bikeshare <- bikeshare %>% mutate(leverage = hatvalues(model2),
+cooks = cooks.distance(model2), stand.resid = rstandard(model2), obs.num = row_number())
+
+
+c1 <- ggplot(data=bikeshare, aes(x=obs.num,y=leverage)) + geom_point(alpha=0.5) + geom_hline(yintercept=0.0246,color="red")+ labs(x="Observation Number",y="Leverage",title="Leverage")
+
+c2 <- ggplot(data=bikeshare, aes(x=obs.num,y=cooks)) + geom_point() + geom_hline(yintercept=1,color="red")+ labs(x="Observation Number",y="Cook's Distance",title="Cook's Distance")
+
+
+plot_grid(c1, c2, ncol =2)
+
+
+```
+
+```{r}
+st1 <- ggplot(data=bikeshare, aes(x=predicted,y=stand.resid)) + geom_point()+ geom_hline(yintercept = 0, color ="red") 
+st2 <- ggplot(data=bikeshare, aes(x=registered,y=stand.resid)) + geom_point()+ geom_hline(yintercept = 0, color ="red") 
+st3 <- ggplot(data=bikeshare, aes(x=workingday,y=stand.resid)) + geom_point()+ geom_hline(yintercept = 0, color ="red") 
+st4 <- ggplot(data=bikeshare, aes(x=temp,y=stand.resid)) + geom_point()+ geom_hline(yintercept = 0, color ="red") 
+st5 <- ggplot(data=bikeshare, aes(x=hum,y=stand.resid)) + geom_point()+ geom_hline(yintercept = 0, color ="red") 
+st6 <- ggplot(data=bikeshare, aes(x=holiday,y=stand.resid)) + geom_point()+ geom_hline(yintercept = 0, color ="red") 
+st7 <- ggplot(data=bikeshare, aes(x=windspeed,y=stand.resid)) + geom_point()+ geom_hline(yintercept = 0, color ="red") 
+
+plot_grid(st1, st2,st3,st4,st5,st6,st7,  ncol =2)
+```
+
+```{r}
+tidy(vif(model2))
+```
+
+Looking at these graphs we see that there are lots of points with high leverage. This likely presents a problem that may need to be addressed. However, this is combatted with the fact that there are no points with a high Cook’s distance (one observation with a slightly higher but not significant) and also that there are no issues with the standard residuals. With the VIF’s we see that the only variables with high VIF’s are temp and temp2 which is expected as they are directly related.
+
+Now that we have checked the assumptions we can add season back into the model
+
+```{r}
+bikeshare <- bikeshare %>% mutate(season = as.factor(season))
+
+modelfinal <- lm(cnt ~ registered + workingday+ temp + hum + holiday + windspeed + temp2 + season, data= bikeshare)
+tidy(modelfinal)
+```
+
+```{r}
+glance(modelfinal)
+```
+
+Looking at the output of the table we see that after accounting for other variables, the season have a significant effect on the number of bike rentals (cnt). Changing from Season 1 to season 2 results in an average bike count to increase by 182.692074. Changing from Season 1 to season 3 results in an average bike count to increase by 51.942091. Changing from Season 1 to season 4 results in an average bike count to decrease by 71.263770. However, the p value for season3 or season4 is not significant.
