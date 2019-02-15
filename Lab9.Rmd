@@ -1,0 +1,235 @@
+---
+title: "Lab9"
+author: "Jackson Hubbard"
+date: "November 12, 2018"
+output: html_document
+---
+
+---
+title: "Lab8"
+author: "Jackson Hubbard"
+date: "November 5, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library("tibble")
+library("dplyr")
+library("ggplot2")
+library("broom")
+library("STA210")
+library("Sleuth3") #data sets from the book
+library("olsrr") # model selection
+library("cowplot")
+library("rms")
+library("knitr")
+library("readr")
+
+```
+
+
+# Part I: Exploratory Data Analysis
+# Question 1
+```{r}
+music <- read_csv("https://raw.githubusercontent.com/matackett/sta210/master/data/spotify.csv")
+glimpse(music)
+
+```
+Valence is a measure from 0 to 1 describing the musical positiveness conveyed by the track. The closer the value is to 1, the more positive the track is.
+
+# Question 2
+# a
+```{r}
+music <- music %>% mutate(like = as.factor(like))
+p1 <- ggplot(data=music,aes(x=like,y=acousticness)) + geom_boxplot() + 
+  labs(title="Acousticness by Like")
+
+p2 <- ggplot(data=music,aes(x=like,y=danceability)) + geom_boxplot() + 
+  labs(title="Danceability by Like")
+
+p3 <- ggplot(data=music,aes(x=like,y=duration_ms)) + geom_boxplot() + 
+  labs(title="Duration (ms) by Like")
+
+p4 <- ggplot(data=music,aes(x=like,y=energy)) + geom_boxplot() + 
+  labs(title="Energy by Like")
+
+p5 <- ggplot(data=music,aes(x=like,y=instrumentalness)) + geom_boxplot() + 
+  labs(title="Instrumentalness by Like")
+
+plot_grid(p1,p2,p3,p4,p5,ncol=3)
+```
+
+# b
+```{r}
+p1 <- ggplot(data=music,aes(x=like,y=liveness)) + geom_boxplot() + 
+  labs(title="Liveness by Like")
+
+p2 <- ggplot(data=music,aes(x=like,y=loudness)) + geom_boxplot() + 
+  labs(title="Loudness by Like")
+
+p3 <- ggplot(data=music,aes(x=like,y=speechiness)) + geom_boxplot() + 
+  labs(title="Speechiness by Like")
+
+p4 <- ggplot(data=music,aes(x=like,y=tempo)) + geom_boxplot() + 
+  labs(title="Tempo by Like")
+
+p5 <- ggplot(data=music,aes(x=like,y=valence)) + geom_boxplot() + 
+  labs(title="Valence by Like")
+
+plot_grid(p1,p2,p3,p4,p5,ncol=3)
+
+```
+
+
+# c
+
+We will use bar graphs to display the distributions of the remaining variables, since they are best understand as describing categories rather than numerical data. Create bar graphs for the variables key, mode, and time_signature. As before, use plot_grid() to neatly organize the plots into two columns.
+
+There are many ways to plot bar graphs. Below is an example of one way to plot a stacked bar graph.
+```{r}
+p1 <- ggplot(data=music,aes(x=key,y=like,fill=like)) +geom_bar(stat="identity") + 
+  labs(title="Like vs. Key", ylab="Proportion of Likes")
+
+p2 <- ggplot(data=music,aes(x=mode,y=like,fill=like)) +geom_bar(stat="identity") + 
+  labs(title="Like vs. Mode", ylab="Proportion of Likes")
+
+p3 <- ggplot(data=music,aes(x=time_signature,y=like,fill=like)) +geom_bar(stat="identity") +  labs(title="Time Signature vs. Key", ylab="Proportion of Likes")
+
+plot_grid(p1, p2, p3, ncol = 2)
+```
+
+
+
+# d
+Looking at the plots, if the medians are different then it is possible that that variable is significant. We can see that loudness, valence, and dancibility have different medians between the two groups so we can say these variables may be useful to differentiating which songs the user likes vs. those the user doesn’t like.
+
+
+
+
+## Part II: Logistic Regression Model
+# Question 3
+
+```{r}
+model.full <- glm(like ~ acousticness + danceability + duration_ms + energy + instrumentalness + key + liveness + loudness + mode + speechiness + tempo + time_signature + valence, family=binomial,data=music)
+tidy(model.full)
+```
+
+```{r}
+glance(model.full)
+
+```
+
+
+Since the primary goal of this analysis is to predict the probability this Spotify user will like a song, we want to only include the variables that have a significant effect. Otherwise, if we inlcude all of the variables like we did in this model, there will be too much noise. Thus, we want to build a new model with a smaller amount of variables that includes only the ones that are significant.
+
+
+# Question 4
+```{r}
+model.selected <- step(model.full,direction="backward")
+
+```
+
+
+# Question 5
+the selected model is: like ~ acousticness + danceability + duration_ms + instrumentalness + liveness + loudness + mode + speechiness + tempo + valence
+
+# Question 6
+```{r}
+tidy(model.selected)
+
+```
+
+Looking at the outputted table it seems that liveness and mode have high p values and thus are not significant. We will delete these from the model. The final model is:
+
+like ~ acousticness + danceability + duration_ms + instrumentalness + loudness + speechiness + tempo + valence
+
+```{r}
+final.model <- glm(like ~ acousticness + danceability + duration_ms + instrumentalness + loudness + speechiness + tempo + valence, family=binomial,data=music)
+
+```
+
+
+# Question 7
+We will now look at the variable duration_ms.
+
+# a
+the units of the variable duration_ms is milliseconds.
+
+# b
+95% confidence interval for the coefficient of duration_ms in terms of its effect on the log-odds of liking a song.
+
+
+```{r}
+#confint.default ensures the confidence interval is calculated correctly for logistic model
+confint.default(final.model,level=0.95)
+```
+
+95% CI for duration_ms is (1.600851e-06, 4.268314e-06)
+
+# c
+```{r}
+tidy(final.model)
+
+```
+For every additional millisecond a song is, the odds of the user liking the song multiplies by e^2.934582e-06 which is 1.00000293459 with a confidence interval of e^ 1.600851e-06 which is 1.00000160085 to e^4.268314e-06 which is 1.00000426832.
+
+# d
+The coefficient would be 2.934582e-06 x 1000 which is 2.934582e-03 if the units of duration were changed to seconds.
+
+# Question 8
+# a
+```{r}
+music <- music %>%
+  mutate(predicted = predict.glm(final.model,type="response"))
+
+# calculate residuals of predicted probabilities and add variable
+music <- music %>%
+  mutate(residuals = residuals.glm(final.model,type="response"))
+```
+
+
+# b
+Plot the residuals vs. the predicted values.
+```{r}
+ggplot(data=music, aes(x=predicted, y=residuals)) + geom_point(alpha=0.7) + 
+geom_hline(yintercept=0,color="red") + 
+labs(title="Residuals vs. Predicted") + 
+theme(plot.title=element_text(hjust=0.5))
+```
+
+
+# c
+The plot of the residuals vs the predicted value is not helpful as there is a direct linear relationship. This is because since it is a logistic model the repsonse is either a 0 or a 1 so the residual will always be positive if the response is 1 and negative when the response is 0
+
+# Question 9
+# a
+```{r}
+binnedplot(x=music$predicted,y=music$residuals,xlab="Predicted")
+
+```
+
+
+# c
+Based on the residual plots above, we see that the model is a pretty good fit. This is because the residual values are not very large and also because there is no systematic patterns in the residuals based upon the value for the explanatory variable. There is a potential issue with a pattern of the residuals based upon loudness and also with instrumentallness. This is likely due to the fact that the dataset of songs does not have a large breadth of songs with differing instrumentallness/ loudness values
+
+## Part IV
+
+# Question 10
+```{r}
+test_songs <- read_csv("https://raw.githubusercontent.com/matackett/sta210/master/data/test_songs.csv")
+
+```
+
+# a
+```{r}
+predict.glm(final.model, newdata=test_songs, type="response")
+
+```
+
+
+# b
+Given the information that the user likes “Hotline Bling” but doesn’t like “Sign of the Times”, we see that the model performs pretty well (if we assume that the threshold is 0.5). It predicts that the probability that the user will like “Sign of the Times” to be 0.3811019, and the probability that the user will like “Hotline Bling” to be 0.6859635. However, simply because the model correctly predicts two songs is not indicative that the model performs well overall- further testing is needed.
+
+
+
